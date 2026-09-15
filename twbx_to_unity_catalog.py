@@ -17,18 +17,24 @@
 
 # COMMAND ----------
 
-# %pip install tableauhyperapi --quiet
-# dbutils.library.restartPython()
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
+import datetime
 import os
 import shutil
 import zipfile
 from pathlib import Path
 
 import pandas as pd
-from tableauhyperapi import HyperProcess, Telemetry, Connection
+from tableauhyperapi import (
+    HyperProcess,
+    Telemetry,
+    Connection,
+    Date as HyperDate,
+    Timestamp as HyperTimestamp,
+)
 
 # COMMAND ----------
 
@@ -70,6 +76,19 @@ def sanitize_name(name: str) -> str:
     return clean or "unnamed_table"
 
 
+def _convert_value(value):
+    """Convert Hyper API's custom Date/Timestamp objects to native Python
+    types so pandas/PyArrow/Spark can handle them correctly."""
+    if isinstance(value, HyperDate):
+        return datetime.date(value.year, value.month, value.day)
+    if isinstance(value, HyperTimestamp):
+        return datetime.datetime(
+            value.year, value.month, value.day,
+            value.hour, value.minute, value.second, value.microsecond,
+        )
+    return value
+
+
 def hyper_to_pandas(hyper_path: str) -> dict:
     """Read every table in a .hyper file into a dict of {name: pandas.DataFrame}."""
     tables = {}
@@ -82,13 +101,31 @@ def hyper_to_pandas(hyper_path: str) -> dict:
                     table_def = connection.catalog.get_table_definition(table)
                     columns = [col.name.unescaped for col in table_def.columns]
                     rows = connection.execute_list_query(query=f"SELECT * FROM {table}")
+                    rows = [[_convert_value(v) for v in row] for row in rows]
                     df = pd.DataFrame(rows, columns=columns)
                     tables[table.name.unescaped] = df
     return tables
 
 
+def dedupe_columns(columns) -> list:
+    """Sanitize column names and make sure no two collide after sanitizing."""
+    seen = {}
+    result = []
+    for col in columns:
+        name = sanitize_name(col)
+        if name in seen:
+            seen[name] += 1
+            name = f"{name}_{seen[name]}"
+        else:
+            seen[name] = 0
+        result.append(name)
+    return result
+
+
 def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: str, schema: str, mode: str):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`")
+    df_pandas = df_pandas.copy()
+    df_pandas.columns = dedupe_columns(df_pandas.columns)
     spark_df = spark.createDataFrame(df_pandas)
     full_table_name = f"`{catalog}`.`{schema}`.`{table_name}`"
     spark_df.write.mode(mode).option("mergeSchema", "true").saveAsTable(full_table_name)
