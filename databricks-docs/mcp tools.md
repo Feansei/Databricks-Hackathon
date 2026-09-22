@@ -119,4 +119,3 @@ score -- meet_threshold? --> job_or_skill_recreate --> databricks_dashboard
 
 semantic_models --> claude_connector --> q_&_a
 ```
-
