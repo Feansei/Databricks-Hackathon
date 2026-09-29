@@ -14,6 +14,10 @@
 # MAGIC - Put the `.twbx` file somewhere the cluster can read it, e.g. a Unity
 # MAGIC   Catalog Volume (`/Volumes/catalog/schema/volume/file.twbx`).
 # MAGIC - Requires the `tableauhyperapi` package on the cluster (installed below).
+# MAGIC - Output layout: each workbook gets its own schema in the `cache_money`
+# MAGIC   catalog, named `<Workbook_Name>_Data_Sources`
+# MAGIC   (e.g. `Workbook A.twbx` -> `cache_money.workbook_a_data_sources.<table>`).
+# MAGIC   Unity Catalog stores identifiers in lowercase.
 
 # COMMAND ----------
 
@@ -40,14 +44,16 @@ from tableauhyperapi import (
 
 # ---- Job parameters (settable via Databricks widgets / job params) ----
 dbutils.widgets.text("twbx_path", "/Volumes/main/default/tableau_uploads/workbook.twbx")
-dbutils.widgets.text("target_catalog", "main")
-dbutils.widgets.text("target_schema", "tableau_extracts")
+dbutils.widgets.text("target_catalog", "cache_money")
+# Leave blank to derive the schema from the workbook name
+# (e.g. "Workbook A.twbx" -> "Workbook_A_Data_Sources").
+dbutils.widgets.text("target_schema", "")
 dbutils.widgets.text("write_mode", "overwrite")  # overwrite | append
 dbutils.widgets.text("extract_dir", "/tmp/tableau_extract")
 
 twbx_path = dbutils.widgets.get("twbx_path")
 target_catalog = dbutils.widgets.get("target_catalog")
-target_schema = dbutils.widgets.get("target_schema")
+target_schema_override = dbutils.widgets.get("target_schema").strip()
 write_mode = dbutils.widgets.get("write_mode")
 extract_dir = dbutils.widgets.get("extract_dir")
 
@@ -76,6 +82,23 @@ def sanitize_name(name: str) -> str:
     clean = clean.strip("_").lower()
     return clean or "unnamed_table"
 
+
+def workbook_schema_name(twbx_path: str) -> str:
+    """Build the per-workbook schema name, e.g. 'Workbook A.twbx' -> 'Workbook_A_Data_Sources'."""
+    stem = Path(twbx_path).stem
+    clean = "".join(c if c.isalnum() or c == "_" else "_" for c in stem)
+    while "__" in clean:
+        clean = clean.replace("__", "_")
+    clean = clean.strip("_") or "Workbook"
+    return f"{clean}_Data_Sources"
+
+
+def ensure_schema(catalog: str, schema: str):
+    """Create the per-workbook schema in the existing catalog."""
+    spark.sql(
+        f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}` "
+        f"COMMENT 'Tables extracted from Tableau workbook data sources'"
+    )
 
 
 def _convert_value(value):
@@ -128,7 +151,6 @@ def dedupe_columns(columns) -> list:
 
 
 def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: str, schema: str, mode: str):
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`")
     df_pandas = df_pandas.copy()
     df_pandas.columns = dedupe_columns(df_pandas.columns)
     spark_df = spark.createDataFrame(df_pandas)
@@ -141,8 +163,13 @@ def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: st
 
 
 def main():
+    target_schema = target_schema_override or workbook_schema_name(twbx_path)
     print(f"Extracting {twbx_path} ...")
-    hyper_files = extract_hyper_files(twbx_path, extract_dir)
+    print(f"Target location: `{target_catalog}`.`{target_schema}`")
+
+    # Use a per-workbook temp folder so parallel runs don't clobber each other.
+    workbook_extract_dir = os.path.join(extract_dir, target_schema)
+    hyper_files = extract_hyper_files(twbx_path, workbook_extract_dir)
 
     if not hyper_files:
         raise RuntimeError(
@@ -150,6 +177,8 @@ def main():
             "connection rather than an embedded extract, so there's no data "
             "to pull out of the file itself."
         )
+
+    ensure_schema(target_catalog, target_schema)
 
     for hyper_file in hyper_files:
         print(f"\nReading hyper extract: {hyper_file}")
