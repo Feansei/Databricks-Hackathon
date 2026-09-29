@@ -75,6 +75,7 @@ def extract_hyper_files(twbx_path: str, extract_dir: str):
     return hyper_files
 
 
+
 def sanitize_name(name: str) -> str:
     """Make a Tableau table/schema name safe for Unity Catalog identifiers."""
     clean = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
@@ -113,6 +114,7 @@ def _convert_value(value):
     return value
 
 
+
 def hyper_to_pandas(hyper_path: str) -> dict:
     """Read every table in a .hyper file into a dict of {name: pandas.DataFrame}."""
     tables = {}
@@ -131,6 +133,7 @@ def hyper_to_pandas(hyper_path: str) -> dict:
     return tables
 
 
+
 def dedupe_columns(columns) -> list:
     """Sanitize column names and make sure no two collide after sanitizing."""
     seen = {}
@@ -146,6 +149,7 @@ def dedupe_columns(columns) -> list:
     return result
 
 
+
 def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: str, schema: str, mode: str):
     df_pandas = df_pandas.copy()
     df_pandas.columns = dedupe_columns(df_pandas.columns)
@@ -156,6 +160,7 @@ def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: st
 
 
 # COMMAND ----------
+
 
 def main():
     target_schema = target_schema_override or workbook_schema_name(twbx_path)
