@@ -69,11 +69,13 @@ def extract_hyper_files(twbx_path: str, extract_dir: str):
     return hyper_files
 
 
+
 def sanitize_name(name: str) -> str:
     """Make a Tableau table/schema name safe for Unity Catalog identifiers."""
     clean = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
     clean = clean.strip("_").lower()
     return clean or "unnamed_table"
+
 
 
 def _convert_value(value):
@@ -87,6 +89,7 @@ def _convert_value(value):
             value.hour, value.minute, value.second, value.microsecond,
         )
     return value
+
 
 
 def hyper_to_pandas(hyper_path: str) -> dict:
@@ -107,6 +110,7 @@ def hyper_to_pandas(hyper_path: str) -> dict:
     return tables
 
 
+
 def dedupe_columns(columns) -> list:
     """Sanitize column names and make sure no two collide after sanitizing."""
     seen = {}
@@ -122,6 +126,7 @@ def dedupe_columns(columns) -> list:
     return result
 
 
+
 def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: str, schema: str, mode: str):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`")
     df_pandas = df_pandas.copy()
@@ -133,6 +138,7 @@ def write_to_unity_catalog(df_pandas: pd.DataFrame, table_name: str, catalog: st
 
 
 # COMMAND ----------
+
 
 def main():
     print(f"Extracting {twbx_path} ...")
