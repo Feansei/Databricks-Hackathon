@@ -4,17 +4,18 @@ import time
 # 1. Initialize client (Automatically picks up DATABRICKS_HOST and DATABRICKS_TOKEN from env variables)
 w = WorkspaceClient()
 space_id = "YOUR_GENIE_SPACE_ID_HERE" # (e.g., a 32-character hex string)
+
 question = """
 You are recreating a single Tableau dashboard as an AI/BI (Lakeview) dashboard in Databricks.
 
 
 CRITICAL CONSTRAINTS:
-You must ONLY recreate the dashboard from the Tableau workbook at: {{workbook_path}}
-You must ONLY use these exact Unity Catalog tables: {{extracted_tables}}
+You must ONLY recreate the dashboard from the Tableau workbook at: {{twbx_path}}
+You must ONLY use existing tables in the Unity Catalog schema: {{target_schema}}
 Do NOT search for, discover, or use any other tables in the workspace even if they exist in the same schema or catalog. The tables listed above are the complete and only data source for this dashboard.
-Do NOT create dashboards for any other workbooks. Your scope is strictly the single workbook at {{workbook_path}}.
+Do NOT create dashboards for any other workbooks. Your scope is strictly the single workbook at {{twbx_path}}.
 Your task:
-1. Parse the comma-separated list in {{extracted_tables}} to identify each fully qualified table name.
+1. Parse the comma-separated list in {{target_schema}} to identify each fully qualified table name.
 2. For each table, inspect its schema (columns, types) to understand the available data.
 3. Create a single new AI/BI dashboard. Name it after the workbook filename derived from {{workbook_path}} (e.g. if the path ends in "SuperStore Test Mid.twbx", name the dashboard "SuperStore Test Mid").
 4. For each of the provided tables, create appropriate visualizations:
