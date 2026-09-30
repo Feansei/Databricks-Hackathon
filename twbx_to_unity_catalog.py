@@ -92,7 +92,7 @@ def _convert_value(value):
 def hyper_to_pandas(hyper_path: str) -> dict:
     """Read every table in a .hyper file into a dict of {name: pandas.DataFrame}."""
     tables = {}
-    with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
+    with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU, parameters={"log_dir": "/tmp"},) as hyper:
         with Connection(endpoint=hyper.endpoint, database=hyper_path) as connection:
             schema_names = connection.catalog.get_schema_names()
             for schema in schema_names:

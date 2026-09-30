@@ -88,7 +88,7 @@ def list_uc_table_paths(extract_dir: str, catalog: str, schema: str) -> list:
                 f"no .hyper file found or tableauhyperapi not installed)"]
 
     table_paths = []
-    with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
+    with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU, parameters={"log_dir": "/tmp"},) as hyper:
         for hyper_file in hyper_files:
             with Connection(endpoint=hyper.endpoint, database=str(hyper_file)) as connection:
                 for schema_name in connection.catalog.get_schema_names():
