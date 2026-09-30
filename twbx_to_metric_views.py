@@ -1,22 +1,25 @@
-"""
-Tableau packaged workbook (.twbx) -> Unity Catalog metric views (one per calculated field).
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Tableau Packaged Workbook (.twbx) -> Unity Catalog Metric Views
+# MAGIC
+# MAGIC Creates one metric view per calculated field.
+# MAGIC
+# MAGIC **Pipeline** (each step is a self-contained function so it can be registered
+# MAGIC as a Unity Catalog Python function; imports and helpers live inside each function):
+# MAGIC
+# MAGIC 1. `parse_twbx_calculations` -> JSON of calcs (name, id, formula), deduplicated
+# MAGIC 2. `build_metric_views` -> one metric view definition (YAML + CREATE VIEW SQL) per calc.
+# MAGIC    Accepts the list of tables materialized by the upstream extract task and, per calc,
+# MAGIC    picks the table that holds the referenced fields (joining extra tables when needed).
+# MAGIC 3. `push_metric_views` -> execute the SQL via the Databricks Statement Execution API
+# MAGIC
+# MAGIC **Upstream dependency:** the `Extract_Data_Source_from_Tableau_Workbook` task, which sets
+# MAGIC the task values `created_tables` (comma-separated catalog.schema.table), `twbx_path` and `uc_schema`.
+# MAGIC
+# MAGIC **Requires:** pandas, databricks-sdk. Optional: unitycatalog-ai (for `register_as_uc_functions`).
+# MAGIC Metric view spec 1.1 -> SQL warehouse / DBR 17.3+ (wildcard fields need 18.2+).
 
-Pipeline (each step is a self-contained function so it can be registered as a
-Unity Catalog Python function; imports and helpers live inside each function):
-
-    1. parse_twbx_calculations  -> JSON of calcs (name, id, formula), deduplicated
-    2. build_metric_views       -> one metric view definition (YAML + CREATE VIEW SQL) per calc.
-                                   Accepts the list of tables materialized by the upstream
-                                   extract task and, per calc, picks the table that holds the
-                                   referenced fields (joining extra tables when needed).
-    3. push_metric_views        -> execute the SQL via the Databricks Statement Execution API
-
-Upstream dependency: the "Extract_Data_Source_from_Tableau_Workbook" task, which sets the
-task values `created_tables` (comma-separated catalog.schema.table), `twbx_path` and `uc_schema`.
-
-Requires: pandas, databricks-sdk. Optional: unitycatalog-ai (for register_as_uc_functions).
-Metric view spec 1.1 -> SQL warehouse / DBR 17.3+ (wildcard fields need 18.2+).
-"""
+# COMMAND ----------
 
 # ---- Job parameters (settable via Databricks widgets / job params) ----
 dbutils.widgets.text("upstream_task_key", "Extract_Data_Source_from_Tableau_Workbook")
